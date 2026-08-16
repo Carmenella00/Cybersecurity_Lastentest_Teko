@@ -1,0 +1,98 @@
+services:
+
+  InfluxDB:
+    image: influxdb:2.7
+    container_name: InfluxDB
+    restart: unless-stopped
+
+    ports:
+      - "8086:8086"
+
+    environment:
+      TZ: Europe/Zurich
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USERNAME}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+
+  InfluxDB-Init:
+    image: influxdb:2.7
+    container_name: InfluxDB-Init
+    restart: "no"
+
+    depends_on:
+      InfluxDB:
+        condition: service_healthy
+
+    environment:
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG}
+
+    entrypoint: ["/bin/sh", "-c"]
+
+    command:
+      - |
+        influx bucket list \
+          --host http://InfluxDB:8086 \
+          --token "$${INFLUX_TOKEN}" \
+          --org "$${INFLUX_ORG}" |
+          grep -q "Security" ||
+        influx bucket create \
+          --host http://InfluxDB:8086 \
+          --token "$${INFLUX_TOKEN}" \
+          --org "$${INFLUX_ORG}" \
+          --name Security
+
+
+  Grafana:
+    healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+        interval: 10s
+        timeout: 5s
+        retries: 10
+        start_period: 10s
+    image: grafana/grafana:latest
+    container_name: Grafana
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      TZ: Europe/Zurich
+
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USERNAME}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG}
+      INFLUX_BUCKET: ${INFLUX_BUCKET}
+
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+    depends_on:
+      InfluxDB:
+        condition: service_healthy
+
+
+volumes:
+  influxdb-data:
+  influxdb-config:
+  grafana-data:
