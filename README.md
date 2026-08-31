@@ -682,6 +682,251 @@ Durch Tests mit unterschiedlichen Worker-Zahlen kann beobachtet werden, wie sich
 Die Ergebnisse können anschliessend im Grafana-Dashboard miteinander verglichen werden.
 
 ---
+# Testen der beiden Modularbeiten
+
+Die beiden Modularbeiten können getrennt voneinander getestet werden. Dadurch lässt sich nachvollziehen, ob sowohl der Lasttest mit InfluxDB als auch die Visualisierung und Automatisierung mit Grafana korrekt funktionieren.
+
+## Modularbeit 1 – InfluxDB und Lasttest testen
+
+Bei der ersten Modularbeit wird geprüft, ob InfluxDB erreichbar ist und ob das Python-Skript erfolgreich einen Lasttest durchführen und die Ergebnisse in InfluxDB speichern kann.
+
+### 1. VM starten
+
+Zuerst wird in das Verzeichnis der Vagrant-VM gewechselt:
+
+```bash
+cd lastentest_vm
+```
+
+Danach wird die VM gestartet:
+
+```bash
+vagrant up
+```
+
+### 2. Verbindung zur VM herstellen
+
+Nach erfolgreichem Start wird eine SSH-Verbindung zur VM hergestellt:
+
+```bash
+vagrant ssh
+```
+
+Innerhalb der VM wird in das Projektverzeichnis gewechselt:
+
+```bash
+cd /project
+```
+
+### 3. InfluxDB prüfen
+
+Zuerst wird kontrolliert, ob der InfluxDB-Container läuft:
+
+```bash
+docker compose ps
+```
+
+Der Container `InfluxDB` sollte den Status `Up` beziehungsweise `healthy` besitzen.
+
+Zusätzlich kann der Health-Endpunkt von InfluxDB geprüft werden:
+
+```bash
+curl http://localhost:8086/health
+```
+
+InfluxDB sollte dabei einen erfolgreichen Status zurückgeben.
+
+### 4. Lasttest durchführen
+
+Für einen kleinen Funktionstest werden beispielsweise 100 Requests mit 10 parallelen Workern ausgeführt:
+
+```bash
+./run-loadtest.sh --requests 100 --workers 10
+```
+
+Nach Abschluss des Tests sollte im Terminal eine Zusammenfassung erscheinen.
+
+Beispiel:
+
+```text
+Requests:      100
+Erfolgreich:   100
+Fehler:        0
+Ø Antwortzeit: 15.32 ms
+P95:           24.81 ms
+```
+
+Damit ist bestätigt, dass das Python-Skript Requests gegen InfluxDB ausführen und die Antwortzeiten messen kann.
+
+### 5. Gespeicherte Messwerte kontrollieren
+
+Anschliessend kann InfluxDB im Browser geöffnet werden:
+
+```text
+http://localhost:8086
+```
+
+Im Bucket `LoadTest` sollten Messwerte mit dem Measurement `loadtest` vorhanden sein.
+
+Dabei werden unter anderem folgende Felder gespeichert:
+
+```text
+requests
+successes
+errors
+avg_latency_ms
+p95_latency_ms
+```
+
+Sind diese Messwerte vorhanden, ist die Funktion der **Modularbeit 1 erfolgreich getestet**.
+
+---
+
+## Modularbeit 2 – Grafana und Automatisierung testen
+
+Bei der zweiten Modularbeit wird geprüft, ob Grafana automatisch gestartet wird, InfluxDB automatisch als Datenquelle erhält und das vorbereitete Dashboard ohne manuelle Konfiguration zur Verfügung steht.
+
+### 1. Containerstatus prüfen
+
+Innerhalb der VM wird zunächst kontrolliert, ob InfluxDB und Grafana laufen:
+
+```bash
+cd /project
+```
+
+Danach:
+
+```bash
+docker compose ps
+```
+
+Die Container `InfluxDB` und `Grafana` sollten beide laufen und einen gesunden Status besitzen.
+
+### 2. Automatisch erstellte Datasource prüfen
+
+Es kann kontrolliert werden, ob die Provisioning-Datei für InfluxDB im Grafana-Container vorhanden ist:
+
+```bash
+docker exec Grafana ls -la /etc/grafana/provisioning/datasources/
+```
+
+Dort sollte die Datei für die InfluxDB-Datenquelle sichtbar sein.
+
+Damit kann überprüft werden, ob das Grafana-Provisioning korrekt in den Container eingebunden wurde.
+
+### 3. Automatisch bereitgestelltes Dashboard prüfen
+
+Danach wird geprüft, ob die Dashboard-Datei im Grafana-Container vorhanden ist:
+
+```bash
+docker exec Grafana ls -la /var/lib/grafana/dashboards/
+```
+
+Dort sollte folgende Datei sichtbar sein:
+
+```text
+loadtest-dashboard.json
+```
+
+### 4. Grafana im Browser öffnen
+
+Grafana kann auf dem Hostsystem über folgende Adresse geöffnet werden:
+
+```text
+http://localhost:3000
+```
+
+Nach der Anmeldung sollte InfluxDB bereits als Datenquelle vorhanden sein.
+
+Das vorbereitete Lasttest-Dashboard sollte ebenfalls automatisch verfügbar sein und die vier vorgesehenen Messwerte darstellen:
+
+- Requests
+- durchschnittliche Antwortzeit
+- Fehler
+- P95-Antwortzeit
+
+Eine manuelle Erstellung der Datenquelle oder des Dashboards sollte nicht notwendig sein.
+
+### 5. Dashboard mit einem Lasttest prüfen
+
+Damit Daten im Dashboard sichtbar werden, wird erneut ein Lasttest durchgeführt:
+
+```bash
+./run-loadtest.sh --requests 1000 --workers 25
+```
+
+Anschliessend wird das Grafana-Dashboard geöffnet beziehungsweise aktualisiert.
+
+Die neuen Messwerte sollten automatisch im Dashboard erscheinen.
+
+Damit ist bestätigt, dass die Kette
+
+```text
+Python-Lasttest → InfluxDB → Grafana → Dashboard
+```
+
+funktioniert.
+
+---
+
+## Vollständige Automatisierung testen
+
+Zusätzlich kann geprüft werden, ob sich die gesamte Umgebung ohne manuelle Installation neu erstellen lässt.
+
+> **Achtung:** Dieser Test löscht die bestehende Vagrant-VM und die darin gespeicherten Docker-Daten.
+
+Zuerst wird die bestehende VM entfernt:
+
+```bash
+vagrant destroy -f
+```
+
+Danach wird die Umgebung vollständig neu aufgebaut:
+
+```bash
+vagrant up
+```
+
+Nach erfolgreichem Aufbau wird eine Verbindung zur VM hergestellt:
+
+```bash
+vagrant ssh
+```
+
+Danach wird in das Projektverzeichnis gewechselt:
+
+```bash
+cd /project
+```
+
+Der Containerstatus wird geprüft:
+
+```bash
+docker compose ps
+```
+
+Anschliessend kann ein neuer Lasttest gestartet werden:
+
+```bash
+./run-loadtest.sh --requests 100 --workers 10
+```
+
+Wenn InfluxDB und Grafana automatisch gestartet werden, die Grafana-Datenquelle und das Dashboard automatisch vorhanden sind und der Lasttest erfolgreich durchgeführt werden kann, ist die vollständige Automatisierung des Projekts erfolgreich getestet.
+
+## Erwartetes Testergebnis
+
+| Test | Erwartetes Ergebnis |
+| --- | --- |
+| InfluxDB-Container | Läuft und ist `healthy` |
+| InfluxDB Health Check | Erfolgreiche Antwort |
+| Python-Lasttest | Requests werden ausgeführt |
+| Speicherung | Messwerte erscheinen im Bucket `LoadTest` |
+| Grafana-Container | Läuft und ist `healthy` |
+| Grafana-Datenquelle | InfluxDB ist automatisch eingerichtet |
+| Grafana-Dashboard | Dashboard ist automatisch vorhanden |
+| Visualisierung | Neue Lasttest-Daten erscheinen im Dashboard |
+| Neuaufbau mit Vagrant | Umgebung wird mit `vagrant up` automatisch erstellt |
+
 
 # Entwicklung von manuell zu automatisiert
 
