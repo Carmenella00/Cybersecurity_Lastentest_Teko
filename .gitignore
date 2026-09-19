@@ -1,3 +1,4 @@
 # Vagrant machine state
 .vagrant/
 **/.vagrant/
+.env
