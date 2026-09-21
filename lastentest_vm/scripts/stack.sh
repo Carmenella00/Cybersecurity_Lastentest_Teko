@@ -12,6 +12,6 @@ fi
 
 cd "${project_dir}"
 
-echo "==> Starting the honeypot stack..."
+echo "==> Starting security stack..."
 docker compose up -d --build --remove-orphans
 docker compose ps
