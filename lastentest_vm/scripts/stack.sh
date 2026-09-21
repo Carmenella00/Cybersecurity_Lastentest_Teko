@@ -12,6 +12,6 @@ fi
 
 cd "${project_dir}"
 
-echo "==> Starting security stack..."
+echo "==> Starting Security stack..."
 docker compose up -d --build --remove-orphans
 docker compose ps
