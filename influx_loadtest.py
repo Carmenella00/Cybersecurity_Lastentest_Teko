@@ -31,16 +31,22 @@ from(bucket: "{BUCKET}")
             headers={
                 "Authorization": f"Token {TOKEN}",
                 "Content-Type": "application/vnd.flux",
+                "Accept": "application/csv",
             },
             data=flux,
             timeout=10,
         )
 
         latency = (time.perf_counter() - start) * 1000
-        return r.status_code == 200, latency
 
-    except requests.RequestException:
-        return False, (time.perf_counter() - start) * 1000
+        if r.status_code != 200:
+            return False, latency, f"HTTP {r.status_code}: {r.text}"
+
+        return True, latency, None
+
+    except requests.RequestException as e:
+        latency = (time.perf_counter() - start) * 1000
+        return False, latency, str(e)
 
 
 def write_result(requests_count, successes, errors, avg_ms, p95_ms):
@@ -53,20 +59,30 @@ def write_result(requests_count, successes, errors, avg_ms, p95_ms):
         f"p95_latency_ms={p95_ms:.2f}"
     )
 
-    requests.post(
-        f"{URL}/api/v2/write",
-        params={
-            "org": ORG,
-            "bucket": BUCKET,
-            "precision": "s",
-        },
-        headers={
-            "Authorization": f"Token {TOKEN}",
-            "Content-Type": "text/plain",
-        },
-        data=data,
-        timeout=5,
-    )
+    try:
+        r = requests.post(
+            f"{URL}/api/v2/write",
+            params={
+                "org": ORG,
+                "bucket": BUCKET,
+                "precision": "s",
+            },
+            headers={
+                "Authorization": f"Token {TOKEN}",
+                "Content-Type": "text/plain",
+            },
+            data=data,
+            timeout=5,
+        )
+
+        if r.status_code == 204:
+            print("Ergebnis erfolgreich in InfluxDB gespeichert.")
+        else:
+            print(f"FEHLER beim Schreiben: HTTP {r.status_code}")
+            print(r.text)
+
+    except requests.RequestException as e:
+        print(f"FEHLER beim Schreiben nach InfluxDB: {e}")
 
 
 def main():
@@ -78,7 +94,16 @@ def main():
     if not TOKEN:
         raise SystemExit("INFLUX_TOKEN ist nicht gesetzt.")
 
-    print(f"Starte {args.requests} Requests mit {args.workers} Workern ...")
+    print(f"URL:    {URL}")
+    print(f"Org:    {ORG}")
+    print(f"Bucket: {BUCKET}")
+    print("Token:  gesetzt")
+    print()
+
+    print(
+        f"Starte {args.requests} Requests "
+        f"mit {args.workers} Workern ..."
+    )
 
     results = []
 
@@ -88,20 +113,18 @@ def main():
         for future in as_completed(futures):
             results.append(future.result())
 
-    successes = sum(1 for success, _ in results if success)
+    successes = sum(1 for success, _, _ in results if success)
     errors = len(results) - successes
-    latencies = [latency for _, latency in results]
+    latencies = [latency for _, latency, _ in results]
 
     avg_ms = statistics.mean(latencies)
     p95_ms = sorted(latencies)[int(len(latencies) * 0.95) - 1]
 
-    write_result(
-        len(results),
-        successes,
-        errors,
-        avg_ms,
-        p95_ms,
-    )
+    error_messages = [
+        error
+        for success, _, error in results
+        if not success and error
+    ]
 
     print()
     print(f"Requests:      {len(results)}")
@@ -109,6 +132,20 @@ def main():
     print(f"Fehler:        {errors}")
     print(f"Ø Antwortzeit: {avg_ms:.2f} ms")
     print(f"P95:           {p95_ms:.2f} ms")
+
+    if error_messages:
+        print()
+        print("Erster Fehler:")
+        print(error_messages[0])
+
+    print()
+    write_result(
+        len(results),
+        successes,
+        errors,
+        avg_ms,
+        p95_ms,
+    )
 
 
 if __name__ == "__main__":
