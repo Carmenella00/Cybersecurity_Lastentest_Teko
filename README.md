@@ -2,171 +2,234 @@
 
 ## Projektübersicht
 
-Dieses Projekt wurde im Rahmen eines Security-Projekts erstellt.
+Dieses Projekt stellt eine automatisierte Laborumgebung für die Durchführung und Auswertung von Lasttests auf einer InfluxDB bereit. Ein Python-Skript erzeugt eine kontrollierte Anzahl paralleler Abfragen gegen InfluxDB und misst dabei unter anderem die Antwortzeiten und aufgetretenen Fehler. Die Ergebnisse werden wieder in InfluxDB gespeichert und anschliessend mit Grafana visualisiert.
 
-Das Ziel besteht darin, eine reproduzierbare Testumgebung für InfluxDB aufzubauen, Lasttests automatisiert durchzuführen und die dabei entstehenden Messwerte mit Grafana zu visualisieren.
+Die Umgebung wurde zunächst manuell aufgebaut und getestet. Dabei wurden InfluxDB und Grafana einzeln installiert und konfiguriert. Nachdem die grundlegende Funktion sichergestellt war, wurde die Umgebung mit Docker Compose automatisiert.
 
-Das Projekt besteht aus zwei zentralen Teilen:
+Vagrant stellt eine Ubuntu-VM bereit und installiert die benötigten Voraussetzungen. Docker Compose startet und konfiguriert InfluxDB und Grafana. Die Grafana-Datenquelle sowie das Dashboard werden über Provisioning automatisch eingerichtet.
 
-### Modularbeit 1 – InfluxDB und Lasttest
+Dadurch kann die vollständige Testumgebung nach dem Klonen des Projekts weitgehend automatisiert mit Vagrant aufgebaut werden.
 
-- Bereitstellung einer InfluxDB
-- Entwicklung eines Python-Lasttests
-- Parallele Requests gegen InfluxDB
-- Messung der Antwortzeiten
-- Erfassung erfolgreicher und fehlerhafter Requests
-- Berechnung der durchschnittlichen Antwortzeit
-- Berechnung der P95-Antwortzeit
-- Speicherung der Testergebnisse in InfluxDB
+Die Dokumentation gliedert das Projekt in zwei aufeinander aufbauende Modularbeiten:
 
-### Modularbeit 2 – Grafana und Automatisierung
+- **Modularbeit 1 – InfluxDB und Lasttest:** Installation und Konfiguration von InfluxDB sowie Entwicklung eines Python-Skripts zur Durchführung eines Lasttests.
+- **Modularbeit 2 – Grafana und Automatisierung:** Visualisierung der Lasttest-Ergebnisse mit Grafana und anschliessende Automatisierung der gesamten Umgebung mit Docker Compose und Vagrant.
 
-- Bereitstellung von Grafana
-- Automatische Konfiguration der InfluxDB-Datenquelle
-- Automatische Bereitstellung eines Grafana-Dashboards
-- Visualisierung der Lasttest-Ergebnisse
-- Automatisierter Aufbau der Umgebung mit Vagrant und Docker Compose
+> Die Umgebung ist ausschliesslich für Schulungs- und Testzwecke vorgesehen. Der Lasttest darf nur gegen die eigene Laborumgebung oder gegen Systeme durchgeführt werden, für die eine ausdrückliche Genehmigung vorliegt.
+
+---
+
+# Abgrenzung der beiden Modularbeiten
+
+## Modularbeit 1 – InfluxDB und Lasttest
+
+Ziel der ersten Modularbeit ist der Aufbau einer InfluxDB und die Entwicklung eines kontrollierten Lasttests.
+
+InfluxDB wurde zunächst manuell auf einer Ubuntu-VM installiert und konfiguriert. Dabei wurden die benötigte Organisation, der Bucket und ein API-Token eingerichtet.
+
+Für die Durchführung des Lasttests wurde ein Python-Skript entwickelt. Das Skript sendet mehrere parallele Flux-Abfragen an InfluxDB und misst die Antwortzeiten der einzelnen Requests.
+
+Für die Auswertung werden unter anderem folgende Werte erfasst:
+
+- Anzahl der Requests
+- erfolgreiche Requests
+- fehlerhafte Requests
+- durchschnittliche Antwortzeit
+- P95-Antwortzeit
+
+Die Ergebnisse werden anschliessend wieder in den InfluxDB-Bucket `LoadTest` geschrieben.
+
+Dadurch können sowohl die Belastung der Datenbank als auch die Auswirkungen einer steigenden Anzahl paralleler Anfragen untersucht werden.
+
+## Modularbeit 2 – Grafana und Automatisierung
+
+Die zweite Modularbeit erweitert die bestehende Umgebung um Grafana.
+
+Grafana wurde zunächst manuell installiert und mit InfluxDB verbunden. Anschliessend wurden Flux-Abfragen erstellt, mit denen die Ergebnisse des Lasttests grafisch dargestellt werden können.
+
+Das Dashboard visualisiert folgende Messwerte:
+
+- Requests
+- durchschnittliche Antwortzeit
+- Fehler
+- P95-Antwortzeit
+
+Nachdem die manuelle Installation und Konfiguration erfolgreich getestet wurde, wurde die Umgebung automatisiert.
+
+InfluxDB und Grafana werden nun als Docker-Container betrieben. Docker Compose übernimmt den Start und die Konfiguration der Dienste.
+
+Grafana wird über Provisioning automatisch konfiguriert. Dadurch werden beim Start:
+
+- die InfluxDB-Datenquelle eingerichtet,
+- die Verbindung zu InfluxDB hergestellt,
+- das vorbereitete Dashboard geladen,
+- die vier benötigten Panels erstellt.
+
+Vagrant stellt zusätzlich die Ubuntu-VM bereit und installiert Docker sowie die für das Lasttest-Skript benötigte Python-Umgebung.
+
+Damit kann die vollständige Umgebung reproduzierbar aufgebaut werden.
 
 ---
 
 # Architektur
 
-Die Testumgebung besteht aus mehreren Ebenen:
+Die automatisierte Umgebung besteht aus einer mit Vagrant verwalteten Ubuntu-VM. Innerhalb dieser VM werden InfluxDB und Grafana über Docker Compose betrieben.
+
+Der Lasttest wird über ein Python-Skript ausgeführt und greift über den veröffentlichten Port `8086` auf den InfluxDB-Container zu.
 
 ```text
-Host-System
-    |
-    v
-Vagrant
-    |
-    v
-Ubuntu VM
-    |
-    v
-Docker Compose
-    |
-    +-------------------+
-    |                   |
-    v                   v
-InfluxDB              Grafana
-Port 8086             Port 3000
-    ^
-    |
-    |
+                    Hostsystem
+                        │
+                        │ Vagrant
+                        ▼
+                ┌─────────────────┐
+                │   Ubuntu VM     │
+                │                 │
+                │  Python-Skript  │
+                │       │         │
+                │       │ Lasttest│
+                │       ▼         │
+                │ ┌─────────────┐ │
+                │ │  InfluxDB   │ │
+                │ │   Docker    │ │
+                │ └──────┬──────┘ │
+                │        │        │
+                │        │ Flux   │
+                │        ▼        │
+                │ ┌─────────────┐ │
+                │ │   Grafana   │ │
+                │ │   Docker    │ │
+                │ └─────────────┘ │
+                └─────────────────┘
+                        │
+             ┌──────────┴──────────┐
+             │                     │
+        localhost:8086        localhost:3000
+          InfluxDB               Grafana
+```
+
+## Datenfluss
+
+Der Datenfluss des Lasttests ist:
+
+```text
 Python-Lasttest
-influx_loadtest.py
+      │
+      │ Flux-Abfragen
+      ▼
+   InfluxDB
+      │
+      │ Lasttest-Ergebnisse
+      ▼
+Bucket "LoadTest"
+      │
+      │ Flux
+      ▼
+    Grafana
+      │
+      ▼
+   Dashboard
 ```
 
-Vagrant stellt die virtuelle Maschine bereit.
-
-Innerhalb der virtuellen Maschine werden InfluxDB und Grafana über Docker Compose gestartet.
-
-Der Python-Lasttest erzeugt Requests gegen InfluxDB und speichert die Ergebnisse anschliessend wieder in InfluxDB.
-
-Grafana liest diese Messwerte aus InfluxDB und stellt sie grafisch dar.
-
----
-
-# Datenfluss
-
-Der Datenfluss während eines Lasttests sieht folgendermassen aus:
-
-```text
-influx_loadtest.py
-        |
-        | Requests
-        v
-     InfluxDB
-        |
-        | Lasttest-Ergebnisse
-        v
-   Bucket LoadTest
-        |
-        | Flux Queries
-        v
-      Grafana
-        |
-        v
-     Dashboard
-```
-
-Dadurch entsteht eine vollständige Kette von der Lastgenerierung bis zur Visualisierung.
+Das Python-Skript erzeugt die Last und schreibt die gemessenen Ergebnisse zurück in InfluxDB. Grafana liest diese Messwerte aus und stellt sie grafisch dar.
 
 ---
 
 # Funktionsumfang
 
-Das Projekt bietet folgende Funktionen:
-
-- Automatisierte Erstellung einer Ubuntu-VM
-- Unterstützung von VirtualBox und Parallels
-- Installation von Docker
-- Start von InfluxDB über Docker Compose
-- Start von Grafana über Docker Compose
-- Persistente Speicherung der Daten
-- Automatische Grafana-Provisionierung
-- Automatische InfluxDB-Datenquelle in Grafana
-- Automatisches Grafana-Dashboard
-- Python-basierter Lasttest
-- Konfigurierbare Anzahl von Requests
-- Konfigurierbare Anzahl paralleler Worker
-- Messung der Antwortzeiten
-- Erfassung von Fehlern
-- Berechnung des P95-Werts
-- Speicherung der Lasttest-Ergebnisse in InfluxDB
-- Visualisierung der Ergebnisse in Grafana
+| Funktion | Modularbeit 1 | Modularbeit 2 |
+| --- | :---: | :---: |
+| Ubuntu-VM mit Vagrant | ✓ | ✓ |
+| Installation von InfluxDB | ✓ | ✓ |
+| Konfiguration von Organisation und Bucket | ✓ | ✓ |
+| API-Zugriff mit Token | ✓ | ✓ |
+| Python-Lasttest | ✓ | ✓ |
+| Parallele Requests | ✓ | ✓ |
+| Messung der Antwortzeiten | ✓ | ✓ |
+| Erfassung von Fehlern | ✓ | ✓ |
+| Speicherung der Lasttest-Ergebnisse | ✓ | ✓ |
+| Grafische Auswertung mit Grafana | – | ✓ |
+| InfluxDB als Grafana-Datenquelle | – | ✓ |
+| Automatisches Grafana-Provisioning | – | ✓ |
+| Automatisches Dashboard | – | ✓ |
+| Containerbetrieb mit Docker Compose | – | ✓ |
+| Automatisierter Aufbau mit Vagrant | – | ✓ |
 
 ---
 
-# Verwendete Technologien
+# Komponenten
 
-Für das Projekt werden folgende Technologien verwendet:
+| Komponente | Aufgabe |
+| --- | --- |
+| **InfluxDB** | Speichert die Zeitreihendaten und die Ergebnisse des Lasttests. |
+| **Grafana** | Visualisiert die in InfluxDB gespeicherten Lasttest-Ergebnisse. |
+| **Python** | Führt den kontrollierten Lasttest gegen InfluxDB aus. |
+| **Requests** | Python-Bibliothek für die HTTP-Anfragen an die InfluxDB-API. |
+| **Docker Compose** | Erstellt, startet und verwaltet InfluxDB und Grafana. |
+| **Vagrant** | Erstellt und provisioniert die Ubuntu-VM und bereitet die Testumgebung vor. |
+| **VirtualBox / Parallels** | Dienen als Virtualisierungsprovider für die Vagrant-VM. |
 
-```text
-Vagrant
-Ubuntu 24.04
-Docker
-Docker Compose
-InfluxDB 2.7
-Grafana
-Python 3
-Flux
-Bash
-Git
-```
+---
+
+# Wieso diese Technologieauswahl
+
+Die Technologien wurden so gewählt, dass sich die Umgebung einfach aufbauen, testen und reproduzieren lässt.
+
+| Verwendete Technologie | Mögliche Alternative | Begründung der Auswahl |
+| --- | --- | --- |
+| **InfluxDB** | PostgreSQL / TimescaleDB | InfluxDB ist speziell für Zeitreihendaten ausgelegt und eignet sich gut für Mess- und Monitoringdaten. |
+| **Grafana** | Kibana | Grafana unterstützt InfluxDB direkt und eignet sich sehr gut zur Visualisierung von Zeitreihendaten. |
+| **Python** | Bash | Python ermöglicht parallele HTTP-Anfragen und eine einfache Berechnung von Antwortzeiten und statistischen Kennzahlen. |
+| **Docker Compose** | Kubernetes | Für zwei Container innerhalb einer Laborumgebung ist Docker Compose wesentlich einfacher und übersichtlicher. |
+| **Vagrant** | Manuell erstellte VM | Vagrant automatisiert die Erstellung und Konfiguration der virtuellen Maschine und verbessert damit die Reproduzierbarkeit. |
+| **VirtualBox / Parallels** | VMware | Beide Provider lassen sich mit Vagrant verwenden und ermöglichen den Betrieb der gleichen Laborumgebung auf unterschiedlichen Hostsystemen. |
 
 ---
 
 # Voraussetzungen
 
-Auf dem Host-System werden benötigt:
+Für den Betrieb der Umgebung werden benötigt:
 
-- Vagrant
-- VirtualBox oder Parallels
 - Git
+- Vagrant 2.4 oder neuer
+- VirtualBox 7.x oder Parallels Desktop
+- bei Parallels das Plugin `vagrant-parallels`
+- aktivierte Hardware-Virtualisierung
+- mindestens 4 GB freier Arbeitsspeicher
+- ungefähr 10 GB freier Speicherplatz
+- Internetzugang beim ersten Start
 
-Für Parallels wird zusätzlich das entsprechende Vagrant-Parallels-Plugin benötigt.
+Für Parallels kann das benötigte Vagrant-Plugin mit folgendem Befehl installiert werden:
+
+```bash
+vagrant plugin install vagrant-parallels
+```
 
 ---
 
 # Projektstruktur
+
+Die Projektstruktur ist folgendermassen aufgebaut:
 
 ```text
 Cybersecurity_Lastentest_Teko/
 ├── README.md
 ├── .env
 ├── .env.example
-├── .gitignore
 ├── docker-compose.yml
 ├── influx_loadtest.py
+│
 ├── grafana/
-│   ├── provisioning/
-│   │   ├── datasources/
-│   │   │   └── influxdb.yml
-│   │   └── dashboards/
-│   │       └── dashboards.yml
-│   └── dashboards/
-│       └── loadtest-dashboard.json
+│   ├── dashboards/
+│   │   └── loadtest-dashboard.json
+│   │
+│   └── provisioning/
+│       ├── dashboards/
+│       │   └── dashboards.yml
+│       │
+│       └── datasources/
+│           └── influxdb.yml
+│
 └── lastentest_vm/
     ├── Vagrantfile
     └── scripts/
@@ -176,88 +239,95 @@ Cybersecurity_Lastentest_Teko/
         └── stack.sh
 ```
 
-Die Datei `influx_loadtest.py` enthält den eigentlichen Lasttest.
+Die Datei `.env` enthält Zugangsdaten und den InfluxDB-Token und sollte deshalb nicht in Git gespeichert werden.
 
 ---
 
 # Umgebungsvariablen
 
-Zugangsdaten und Konfigurationswerte werden über eine `.env`-Datei verwaltet.
+InfluxDB und Grafana werden über eine `.env`-Datei konfiguriert.
 
-Beispiel:
+Eine Beispielkonfiguration sieht folgendermassen aus:
 
 ```env
 INFLUX_USERNAME=admin
 INFLUX_PASSWORD=DEIN_PASSWORT
-
 INFLUX_ORG=Iot
 INFLUX_BUCKET=LoadTest
-INFLUX_TOKEN='DEIN_INFLUX_TOKEN'
+INFLUX_TOKEN=DEIN_TOKEN
 
 GRAFANA_USERNAME=admin
 GRAFANA_PASSWORD=DEIN_PASSWORT
 ```
 
-Die `.env`-Datei darf nicht in ein öffentliches Git-Repository übertragen werden.
+Die Datei `.env` sollte über `.gitignore` vom Git-Repository ausgeschlossen werden.
 
-Sie wird deshalb über `.gitignore` ausgeschlossen:
+Stattdessen wird eine `.env.example` als Vorlage im Repository bereitgestellt.
 
-```gitignore
-.env
-venv/
-.vagrant/
-.DS_Store
-*.box
+Nach dem Klonen kann daraus eine lokale `.env` erstellt werden:
+
+```bash
+cp .env.example .env
 ```
 
-Für das Repository kann stattdessen eine `.env.example` mit Platzhaltern verwendet werden.
+Anschliessend müssen die gewünschten Zugangsdaten und der InfluxDB-Token eingetragen werden.
 
 ---
 
-# InfluxDB API Token
+# Setup und Start
 
-Der Python-Lasttest benötigt einen gültigen InfluxDB API Token.
+## 1. Repository klonen
 
-Für dieses Projekt kann ein Custom API Token verwendet werden.
+Das Repository wird zunächst auf das Hostsystem geklont:
 
-Der Token benötigt für den Bucket `LoadTest` folgende Berechtigungen:
-
-```text
-Read  → LoadTest
-Write → LoadTest
+```bash
+git clone <repository-url>
 ```
 
-Die Read-Berechtigung wird benötigt, da der Lasttest Abfragen gegen InfluxDB durchführt.
+Anschliessend wird in das Projektverzeichnis gewechselt:
 
-Die Write-Berechtigung wird benötigt, damit die Ergebnisse des Lasttests anschliessend in InfluxDB gespeichert werden können.
-
-Der Token wird in der `.env`-Datei hinterlegt:
-
-```env
-INFLUX_TOKEN='DEIN_INFLUX_TOKEN'
+```bash
+cd Cybersecurity_Lastentest_Teko
 ```
 
-Ein Custom Token mit ausschliesslichem Zugriff auf den benötigten Bucket folgt dem Prinzip der minimalen Berechtigungen.
+## 2. Umgebungsdatei erstellen
 
-Wenn ein neuer Token in InfluxDB erstellt wird, muss dieser ebenfalls in der `.env`-Datei aktualisiert werden.
+Die Beispielkonfiguration wird kopiert:
 
-Anschliessend müssen betroffene Container neu erstellt werden, damit der neue Token übernommen wird.
+```bash
+cp .env.example .env
+```
 
----
+Anschliessend können die Werte in `.env` angepasst werden.
 
-# Umgebung starten
-
-Zuerst in das Verzeichnis mit dem Vagrantfile wechseln:
+## 3. In das Vagrant-Verzeichnis wechseln
 
 ```bash
 cd lastentest_vm
 ```
 
-Danach die virtuelle Maschine starten:
+## 4. VM starten
+
+Die vollständige Umgebung wird mit folgendem Befehl gestartet:
 
 ```bash
 vagrant up
 ```
+
+Vagrant erstellt die Ubuntu-VM und führt die Provisioning-Skripte aus.
+
+Dabei werden:
+
+1. die Ubuntu-VM vorbereitet,
+2. Docker installiert,
+3. die benötigten Python-Werkzeuge installiert,
+4. das Projekt in die VM eingebunden beziehungsweise synchronisiert,
+5. InfluxDB gestartet,
+6. Grafana gestartet,
+7. die InfluxDB-Datenquelle in Grafana eingerichtet,
+8. das Grafana-Dashboard bereitgestellt.
+
+Beim ersten Start müssen die Vagrant-Box und die Docker-Images heruntergeladen werden. Deshalb kann der erste Aufbau mehrere Minuten dauern.
 
 ---
 
@@ -265,11 +335,15 @@ vagrant up
 
 ## VirtualBox
 
+Soll VirtualBox ausdrücklich als Provider verwendet werden:
+
 ```bash
 vagrant up --provider=virtualbox
 ```
 
 ## Parallels
+
+Soll Parallels ausdrücklich als Provider verwendet werden:
 
 ```bash
 vagrant up --provider=parallels
@@ -277,67 +351,23 @@ vagrant up --provider=parallels
 
 ---
 
-# Verbindung zur virtuellen Maschine
+# Status der Umgebung prüfen
 
-Nach dem Start kann eine SSH-Verbindung zur VM hergestellt werden:
+## Vagrant-Status
+
+Der Status der VM kann mit folgendem Befehl geprüft werden:
+
+```bash
+vagrant status
+```
+
+## SSH-Verbindung herstellen
 
 ```bash
 vagrant ssh
 ```
 
-Das Projekt befindet sich innerhalb der VM unter:
-
-```text
-/project
-```
-
-In das Projektverzeichnis wechseln:
-
-```bash
-cd /project
-```
-
----
-
-# Zeitzone
-
-Die virtuelle Maschine verwendet die Zeitzone `Europe/Zurich`.
-
-Die Zeitzone kann mit folgendem Befehl gesetzt werden:
-
-```bash
-sudo timedatectl set-timezone Europe/Zurich
-```
-
-Die automatische Zeitsynchronisation kann aktiviert werden:
-
-```bash
-sudo timedatectl set-ntp true
-```
-
-Die aktuelle Konfiguration kann geprüft werden:
-
-```bash
-timedatectl
-```
-
-Die aktuelle Uhrzeit kann geprüft werden:
-
-```bash
-date
-```
-
-Die Docker-Container verwenden ebenfalls:
-
-```yaml
-TZ: Europe/Zurich
-```
-
-Dadurch verwenden VM und Container eine konsistente Zeitzone.
-
----
-
-# Docker-Container prüfen
+## In das Projektverzeichnis wechseln
 
 Innerhalb der VM:
 
@@ -345,50 +375,30 @@ Innerhalb der VM:
 cd /project
 ```
 
-Danach:
+## Docker-Container prüfen
 
 ```bash
-sudo docker ps
+docker compose ps
 ```
 
-Es sollten mindestens folgende Container laufen:
+InfluxDB und Grafana sollten beide laufen und einen gesunden Status besitzen.
+
+Beispiel:
 
 ```text
-InfluxDB
-Grafana
-```
-
-Beide Container sollten nach erfolgreichem Start als `healthy` angezeigt werden.
-
----
-
-# InfluxDB prüfen
-
-InfluxDB ist über Port `8086` erreichbar.
-
-Im Browser:
-
-```text
-http://localhost:8086
-```
-
-Der Zustand von InfluxDB kann innerhalb der VM zusätzlich geprüft werden:
-
-```bash
-curl http://localhost:8086/health
+NAME       STATUS
+InfluxDB   Up (healthy)
+Grafana    Up (healthy)
 ```
 
 ---
 
-# Grafana prüfen
+# Zugriff auf die Dienste
 
-Grafana ist über Port `3000` erreichbar.
-
-Im Browser:
-
-```text
-http://localhost:3000
-```
+| Dienst | Adresse | Aufgabe |
+| --- | --- | --- |
+| InfluxDB | `http://localhost:8086` | Speicherung und Abfrage der Messwerte |
+| Grafana | `http://localhost:3000` | Visualisierung des Lasttests |
 
 Die Zugangsdaten werden über die `.env`-Datei definiert.
 
@@ -396,22 +406,35 @@ Die Zugangsdaten werden über die `.env`-Datei definiert.
 
 # Automatische InfluxDB-Konfiguration
 
-InfluxDB wird beim ersten Start über Docker Compose initialisiert.
+InfluxDB wird beim ersten Start des Containers automatisch eingerichtet.
 
-Dabei werden unter anderem folgende Werte verwendet:
+Docker Compose verwendet dazu folgende Umgebungsvariablen:
 
 ```text
-Organisation: Iot
-Bucket:       LoadTest
+INFLUX_USERNAME
+INFLUX_PASSWORD
+INFLUX_ORG
+INFLUX_BUCKET
+INFLUX_TOKEN
 ```
 
-Die Werte werden über die `.env`-Datei an Docker Compose übergeben.
+Der für den Lasttest verwendete Bucket ist:
+
+```text
+LoadTest
+```
+
+Die Messwerte des Lasttests werden unter folgendem Measurement gespeichert:
+
+```text
+loadtest
+```
 
 ---
 
 # Automatische Grafana-Konfiguration
 
-Grafana wird über Provisioning-Dateien automatisch konfiguriert.
+Grafana wird beim Containerstart über Provisioning konfiguriert.
 
 Die InfluxDB-Datenquelle befindet sich unter:
 
@@ -419,19 +442,25 @@ Die InfluxDB-Datenquelle befindet sich unter:
 grafana/provisioning/datasources/influxdb.yml
 ```
 
-Grafana verwendet innerhalb des Docker-Netzwerks folgende InfluxDB-Adresse:
+Dadurch wird InfluxDB automatisch als Datenquelle in Grafana eingerichtet.
+
+Innerhalb des Docker-Netzwerks verwendet Grafana folgende Adresse:
 
 ```text
 http://InfluxDB:8086
 ```
 
-Innerhalb eines Docker-Containers darf hierfür nicht `localhost:8086` verwendet werden, da `localhost` auf den jeweiligen Container selbst zeigen würde.
+Grafana verwendet dabei die in `.env` definierten Werte für Organisation, Bucket und Token.
+
+Eine manuelle Einrichtung der Datenquelle ist dadurch nach einem Neuaufbau nicht mehr notwendig.
 
 ---
 
 # Automatisches Grafana-Dashboard
 
-Die Dashboard-Provisionierung befindet sich unter:
+Das Dashboard wird automatisch über Grafana Provisioning geladen.
+
+Die Provisioning-Konfiguration befindet sich unter:
 
 ```text
 grafana/provisioning/dashboards/dashboards.yml
@@ -443,184 +472,116 @@ Das eigentliche Dashboard befindet sich unter:
 grafana/dashboards/loadtest-dashboard.json
 ```
 
-Das Dashboard enthält folgende Messwerte:
+Beim Start von Grafana wird diese Datei automatisch eingelesen.
 
-```text
-Requests
-Durchschnittliche Antwortzeit
-Fehler
-P95-Antwortzeit
-```
+Das Dashboard enthält vier zentrale Panels:
+
+| Panel | Bedeutung |
+| --- | --- |
+| **Requests** | Anzahl der ausgeführten Requests |
+| **Durchschnittliche Antwortzeit** | Durchschnittliche Antwortzeit der InfluxDB-Abfragen in Millisekunden |
+| **Fehler** | Anzahl fehlgeschlagener Requests |
+| **P95 Antwortzeit** | Antwortzeit, unterhalb der 95 % der gemessenen Requests liegen |
+
+Damit ist nach einem Neuaufbau der Umgebung keine manuelle Erstellung des Dashboards erforderlich.
 
 ---
 
 # Lasttest ausführen
 
-Der Lasttest wird direkt über das Python-Skript ausgeführt:
+Der Lasttest befindet sich in:
 
 ```text
 influx_loadtest.py
 ```
 
-Das Skript unterstützt zwei zentrale Parameter:
+## Mit der VM verbinden
 
-```text
---requests
---workers
+Im Verzeichnis `lastentest_vm`:
+
+```bash
+vagrant ssh
 ```
 
-`--requests` definiert die Gesamtzahl der Requests.
-
-`--workers` definiert die maximale Anzahl gleichzeitig ausgeführter Requests.
-
-Eine feste Anzahl von Requests pro Sekunde oder eine feste Testdauer wird in der aktuellen Version nicht verwendet.
-
----
-
-# Umgebungsvariablen vor dem Lasttest laden
-
-Vor dem Start des Python-Skripts müssen die benötigten Umgebungsvariablen aus der `.env`-Datei geladen werden.
-
-Zuerst:
+## In das Projektverzeichnis wechseln
 
 ```bash
 cd /project
 ```
 
-Danach:
+## Kleinen Lasttest starten
 
-```bash
-set -a
-source .env
-set +a
-```
-
-Damit stehen unter anderem folgende Variablen für das Python-Skript zur Verfügung:
-
-```text
-INFLUX_ORG
-INFLUX_BUCKET
-INFLUX_TOKEN
-```
-
----
-
-# Leichter Lasttest
-
-Für einen leichten Lasttest werden 100 Requests mit maximal 10 parallelen Workern ausgeführt:
+Für einen ersten Funktionstest:
 
 ```bash
 python3 influx_loadtest.py --requests 100 --workers 10
 ```
 
-Dieser Test eignet sich insbesondere zur Funktionskontrolle der Umgebung.
+Dabei werden 100 Requests mit maximal 10 parallelen Workern ausgeführt.
 
----
+## Grösseren Lasttest starten
 
-# Mittlerer Lasttest
-
-Für einen mittleren Lasttest werden 1000 Requests mit maximal 25 parallelen Workern ausgeführt:
-
-```bash
-python3 influx_loadtest.py --requests 1000 --workers 25
-```
-
-Dieser Test erzeugt eine deutlich höhere Anzahl von Anfragen und eignet sich für einen Vergleich der Antwortzeiten.
-
----
-
-# Schwerer Lasttest
-
-Für einen schweren Lasttest werden 5000 Requests mit maximal 50 parallelen Workern ausgeführt:
+Beispielsweise:
 
 ```bash
 python3 influx_loadtest.py --requests 5000 --workers 50
 ```
 
-Die Last sollte kontrolliert und schrittweise erhöht werden.
-
----
-
-# Übersicht der Laststufen
-
-| Laststufe | Requests | Worker |
-|---|---:|---:|
-| Leicht | 100 | 10 |
-| Mittel | 1000 | 25 |
-| Schwer | 5000 | 50 |
-
-Durch die verschiedenen Laststufen kann untersucht werden, wie sich eine höhere Anzahl von Requests und parallelen Workern auf die Antwortzeiten von InfluxDB auswirkt.
-
----
-
-# Erwartete Ausgabe des Lasttests
-
-Ein erfolgreicher Lasttest kann beispielsweise folgende Ausgabe erzeugen:
-
-```text
-URL:    http://localhost:8086
-Org:    Iot
-Bucket: LoadTest
-Token:  gesetzt
-
-Starte 100 Requests mit 10 Workern ...
-
-Requests:      100
-Erfolgreich:   100
-Fehler:        0
-Ø Antwortzeit: 12.20 ms
-P95:           16.68 ms
-```
-
-Die tatsächlichen Antwortzeiten hängen von der verwendeten Hardware, der VM-Konfiguration und der aktuellen Systemlast ab.
+Die Anzahl der Requests und Worker sollte kontrolliert erhöht werden.
 
 ---
 
 # Funktionsweise des Lasttests
 
-Der Python-Lasttest sendet parallele Anfragen an die InfluxDB.
-
-Für die Parallelisierung werden mehrere Worker verwendet.
-
-Der grundsätzliche Ablauf sieht folgendermassen aus:
+Das Python-Skript sendet parallele Flux-Abfragen an die lokale InfluxDB-Schnittstelle:
 
 ```text
-Python-Skript starten
-        |
-        v
-Requests parallel ausführen
-        |
-        v
-Antwortzeiten messen
-        |
-        v
-Erfolge und Fehler zählen
-        |
-        v
-Durchschnitt berechnen
-        |
-        v
-P95 berechnen
-        |
-        v
-Ergebnis in InfluxDB speichern
+http://localhost:8086
 ```
 
-Dadurch kann untersucht werden, wie sich InfluxDB unter verschiedenen Laststufen verhält.
+Da Docker den Port `8086` des InfluxDB-Containers an die VM weiterleitet, erreichen diese Requests direkt den InfluxDB-Container.
+
+Der Ablauf ist:
+
+```text
+influx_loadtest.py
+       │
+       ├── startet parallele Requests
+       │
+       ▼
+    InfluxDB
+       │
+       ├── beantwortet Flux-Abfragen
+       │
+       ▼
+Python misst Antwortzeiten
+       │
+       ├── berechnet Statistiken
+       │
+       ▼
+Bucket "LoadTest"
+       │
+       ▼
+     Grafana
+```
+
+Nach Abschluss des Tests werden die Ergebnisse zusätzlich im Terminal ausgegeben.
+
+Beispiel:
+
+```text
+Requests:      100
+Erfolgreich:   100
+Fehler:        0
+Ø Antwortzeit: 15.32 ms
+P95:           24.81 ms
+```
 
 ---
 
-# Gespeicherte Messwerte
+# Messwerte des Lasttests
 
-Nach Abschluss eines Lasttests werden die Ergebnisse in InfluxDB gespeichert.
-
-Das verwendete Measurement lautet:
-
-```text
-loadtest
-```
-
-Dabei werden folgende Felder gespeichert:
+Das Skript schreibt folgende Messwerte nach InfluxDB:
 
 ```text
 requests
@@ -630,62 +591,13 @@ avg_latency_ms
 p95_latency_ms
 ```
 
-## requests
-
-Gesamtzahl der ausgeführten Requests.
-
-## successes
-
-Anzahl der erfolgreich ausgeführten Requests.
-
-## errors
-
-Anzahl der fehlgeschlagenen Requests.
-
-## avg_latency_ms
-
-Durchschnittliche Antwortzeit in Millisekunden.
-
-## p95_latency_ms
-
-P95-Antwortzeit in Millisekunden.
-
-Der P95-Wert bedeutet, dass 95 Prozent der gemessenen Antwortzeiten kleiner oder gleich diesem Wert sind.
-
----
-
-# Daten in InfluxDB prüfen
-
-Nach einem Lasttest können die gespeicherten Ergebnisse direkt über den InfluxDB Data Explorer geprüft werden.
-
-Beispiel:
-
-```flux
-from(bucket: "LoadTest")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r._measurement == "loadtest")
-```
-
-Nur die Anzahl der Requests kann beispielsweise folgendermassen abgefragt werden:
-
-```flux
-from(bucket: "LoadTest")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r._measurement == "loadtest")
-  |> filter(fn: (r) => r._field == "requests")
-```
-
----
-
-# Grafana Queries
-
-Grafana verwendet Flux Queries, um die gespeicherten Lasttest-Daten aus InfluxDB abzurufen.
+Diese Werte bilden die Grundlage für das Grafana-Dashboard.
 
 ## Requests
 
 ```flux
 from(bucket: "LoadTest")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> range(start: v.timeRangeStart)
   |> filter(fn: (r) => r._measurement == "loadtest")
   |> filter(fn: (r) => r._field == "requests")
 ```
@@ -694,7 +606,7 @@ from(bucket: "LoadTest")
 
 ```flux
 from(bucket: "LoadTest")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> range(start: v.timeRangeStart)
   |> filter(fn: (r) => r._measurement == "loadtest")
   |> filter(fn: (r) => r._field == "avg_latency_ms")
 ```
@@ -703,7 +615,7 @@ from(bucket: "LoadTest")
 
 ```flux
 from(bucket: "LoadTest")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> range(start: v.timeRangeStart)
   |> filter(fn: (r) => r._measurement == "loadtest")
   |> filter(fn: (r) => r._field == "errors")
 ```
@@ -712,7 +624,7 @@ from(bucket: "LoadTest")
 
 ```flux
 from(bucket: "LoadTest")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> range(start: v.timeRangeStart)
   |> filter(fn: (r) => r._measurement == "loadtest")
   |> filter(fn: (r) => r._field == "p95_latency_ms")
 ```
@@ -721,491 +633,616 @@ from(bucket: "LoadTest")
 
 # Interpretation der Ergebnisse
 
-Die wichtigsten Messwerte sind die durchschnittliche Antwortzeit und die P95-Antwortzeit.
+Die durchschnittliche Antwortzeit zeigt, wie schnell InfluxDB die Requests während des Tests im Mittel beantwortet.
 
-Eine steigende durchschnittliche Antwortzeit bei höherer Last kann darauf hinweisen, dass InfluxDB stärker ausgelastet wird.
+Die P95-Antwortzeit ist besonders hilfreich, um langsamere Requests sichtbar zu machen. Ein P95-Wert von beispielsweise `100 ms` bedeutet, dass 95 % der gemessenen Requests innerhalb von ungefähr 100 Millisekunden beantwortet wurden.
 
-Der P95-Wert ist besonders hilfreich, weil einzelne langsame Requests dadurch besser sichtbar werden.
+Die Fehlerzahl zeigt, ob InfluxDB bei der gewählten Belastung Requests nicht mehr erfolgreich beantworten konnte.
 
-Zusätzlich sollte die Anzahl der Fehler betrachtet werden.
+Durch Tests mit unterschiedlichen Worker-Zahlen kann beobachtet werden, wie sich eine steigende Parallelität auf die Datenbank auswirkt.
 
-Wenn bei einer höheren Anzahl von Workern Fehler auftreten, kann dies auf eine Überlastung oder andere Einschränkungen der Testumgebung hinweisen.
+## Beispiel mit 10 Workern
 
-Die Ergebnisse hängen stark von der verfügbaren CPU-Leistung, dem Arbeitsspeicher, der VM-Konfiguration und der Host-Hardware ab.
+```bash
+python3 influx_loadtest.py --requests 1000 --workers 10
+```
+
+## Beispiel mit 25 Workern
+
+```bash
+python3 influx_loadtest.py --requests 1000 --workers 25
+```
+
+## Beispiel mit 50 Workern
+
+```bash
+python3 influx_loadtest.py --requests 1000 --workers 50
+```
+
+## Beispiel mit 100 Workern
+
+```bash
+python3 influx_loadtest.py --requests 1000 --workers 100
+```
+
+Die Ergebnisse können anschliessend im Grafana-Dashboard miteinander verglichen werden.
 
 ---
-
 # Testen der beiden Modularbeiten
 
-## Modularbeit 1 testen
+Die beiden Modularbeiten können getrennt voneinander getestet werden. Dadurch lässt sich nachvollziehen, ob sowohl der Lasttest mit InfluxDB als auch die Visualisierung und Automatisierung mit Grafana korrekt funktionieren.
 
-Zuerst prüfen, ob InfluxDB läuft:
+## Modularbeit 1 – InfluxDB und Lasttest testen
 
-```bash
-sudo docker ps
-```
+Bei der ersten Modularbeit wird geprüft, ob InfluxDB erreichbar ist und ob das Python-Skript erfolgreich einen Lasttest durchführen und die Ergebnisse in InfluxDB speichern kann.
 
-Danach die Umgebungsvariablen laden:
+### 1. VM starten
 
-```bash
-set -a
-source .env
-set +a
-```
-
-Anschliessend einen leichten Lasttest durchführen:
-
-```bash
-python3 influx_loadtest.py --requests 100 --workers 10
-```
-
-Wenn Requests erfolgreich verarbeitet und die Ergebnisse in InfluxDB gespeichert werden, funktioniert der erste Teil des Projekts.
-
----
-
-## Modularbeit 2 testen
-
-Prüfen, ob Grafana läuft:
-
-```bash
-sudo docker ps
-```
-
-Danach Grafana im Browser öffnen:
-
-```text
-http://localhost:3000
-```
-
-Das provisionierte Lasttest-Dashboard öffnen.
-
-Die zuvor erzeugten Messwerte sollten dort dargestellt werden.
-
-Damit wird geprüft, ob Grafana erfolgreich auf die Daten aus InfluxDB zugreifen kann.
-
----
-
-# Vollständige Automatisierung testen
-
-Um die gesamte Umgebung zu testen, kann die VM neu erstellt werden.
-
-Zuerst:
+Zuerst wird in das Verzeichnis der Vagrant-VM gewechselt:
 
 ```bash
 cd lastentest_vm
 ```
 
-Danach:
-
-```bash
-vagrant destroy -f
-```
-
-Anschliessend:
+Danach wird die VM gestartet:
 
 ```bash
 vagrant up
 ```
 
-Danach:
+### 2. Verbindung zur VM herstellen
+
+Nach erfolgreichem Start wird eine SSH-Verbindung zur VM hergestellt:
 
 ```bash
 vagrant ssh
 ```
 
-In das Projektverzeichnis wechseln:
+Innerhalb der VM wird in das Projektverzeichnis gewechselt:
 
 ```bash
 cd /project
 ```
 
-Container prüfen:
+### 3. InfluxDB prüfen
+
+Zuerst wird kontrolliert, ob der InfluxDB-Container läuft:
 
 ```bash
-sudo docker ps
+docker compose ps
 ```
 
-Umgebungsvariablen laden:
+Der Container `InfluxDB` sollte den Status `Up` beziehungsweise `healthy` besitzen.
+
+Zusätzlich kann der Health-Endpunkt von InfluxDB geprüft werden:
 
 ```bash
-set -a
-source .env
-set +a
+curl http://localhost:8086/health
 ```
 
-Lasttest starten:
+InfluxDB sollte dabei einen erfolgreichen Status zurückgeben.
+
+### 4. Lasttest durchführen
+
+Für einen kleinen Funktionstest werden beispielsweise 100 Requests mit 10 parallelen Workern ausgeführt:
 
 ```bash
 python3 influx_loadtest.py --requests 100 --workers 10
 ```
 
-Anschliessend können die Ergebnisse über InfluxDB und Grafana kontrolliert werden.
+Nach Abschluss des Tests sollte im Terminal eine Zusammenfassung erscheinen.
+
+Beispiel:
+
+```text
+Requests:      100
+Erfolgreich:   100
+Fehler:        0
+Ø Antwortzeit: 15.32 ms
+P95:           24.81 ms
+```
+
+Damit ist bestätigt, dass das Python-Skript Requests gegen InfluxDB ausführen und die Antwortzeiten messen kann.
+
+### 5. Gespeicherte Messwerte kontrollieren
+
+Anschliessend kann InfluxDB im Browser geöffnet werden:
+
+```text
+http://localhost:8086
+```
+
+Im Bucket `LoadTest` sollten Messwerte mit dem Measurement `loadtest` vorhanden sein.
+
+Dabei werden unter anderem folgende Felder gespeichert:
+
+```text
+requests
+successes
+errors
+avg_latency_ms
+p95_latency_ms
+```
+
+Sind diese Messwerte vorhanden, ist die Funktion der **Modularbeit 1 erfolgreich getestet**.
 
 ---
 
-# Erwartete Ergebnisse
+## Modularbeit 2 – Grafana und Automatisierung testen
+
+Bei der zweiten Modularbeit wird geprüft, ob Grafana automatisch gestartet wird, InfluxDB automatisch als Datenquelle erhält und das vorbereitete Dashboard ohne manuelle Konfiguration zur Verfügung steht.
+
+### 1. Containerstatus prüfen
+
+Innerhalb der VM wird zunächst kontrolliert, ob InfluxDB und Grafana laufen:
+
+```bash
+cd /project
+```
+
+Danach:
+
+```bash
+docker compose ps
+```
+
+Die Container `InfluxDB` und `Grafana` sollten beide laufen und einen gesunden Status besitzen.
+
+### 2. Automatisch erstellte Datasource prüfen
+
+Es kann kontrolliert werden, ob die Provisioning-Datei für InfluxDB im Grafana-Container vorhanden ist:
+
+```bash
+docker exec Grafana ls -la /etc/grafana/provisioning/datasources/
+```
+
+Dort sollte die Datei für die InfluxDB-Datenquelle sichtbar sein.
+
+Damit kann überprüft werden, ob das Grafana-Provisioning korrekt in den Container eingebunden wurde.
+
+### 3. Automatisch bereitgestelltes Dashboard prüfen
+
+Danach wird geprüft, ob die Dashboard-Datei im Grafana-Container vorhanden ist:
+
+```bash
+docker exec Grafana ls -la /var/lib/grafana/dashboards/
+```
+
+Dort sollte folgende Datei sichtbar sein:
+
+```text
+loadtest-dashboard.json
+```
+
+### 4. Grafana im Browser öffnen
+
+Grafana kann auf dem Hostsystem über folgende Adresse geöffnet werden:
+
+```text
+http://localhost:3000
+```
+
+Nach der Anmeldung sollte InfluxDB bereits als Datenquelle vorhanden sein.
+
+Das vorbereitete Lasttest-Dashboard sollte ebenfalls automatisch verfügbar sein und die vier vorgesehenen Messwerte darstellen:
+
+- Requests
+- durchschnittliche Antwortzeit
+- Fehler
+- P95-Antwortzeit
+
+Eine manuelle Erstellung der Datenquelle oder des Dashboards sollte nicht notwendig sein.
+
+### 5. Dashboard mit einem Lasttest prüfen
+
+Damit Daten im Dashboard sichtbar werden, wird erneut ein Lasttest durchgeführt:
+
+```bash
+python3 influx_loadtest.py --requests 1000 --workers 25
+```
+
+Anschliessend wird das Grafana-Dashboard geöffnet beziehungsweise aktualisiert.
+
+Die neuen Messwerte sollten automatisch im Dashboard erscheinen.
+
+Damit ist bestätigt, dass die Kette
+
+```text
+Python-Lasttest → InfluxDB → Grafana → Dashboard
+```
+
+funktioniert.
+
+---
+
+## Vollständige Automatisierung testen
+
+Zusätzlich kann geprüft werden, ob sich die gesamte Umgebung ohne manuelle Installation neu erstellen lässt.
+
+> **Achtung:** Dieser Test löscht die bestehende Vagrant-VM und die darin gespeicherten Docker-Daten.
+
+Zuerst wird die bestehende VM entfernt:
+
+```bash
+vagrant destroy -f
+```
+
+Danach wird die Umgebung vollständig neu aufgebaut:
+
+```bash
+vagrant up
+```
+
+Nach erfolgreichem Aufbau wird eine Verbindung zur VM hergestellt:
+
+```bash
+vagrant ssh
+```
+
+Danach wird in das Projektverzeichnis gewechselt:
+
+```bash
+cd /project
+```
+
+Der Containerstatus wird geprüft:
+
+```bash
+docker compose ps
+```
+
+Anschliessend kann ein neuer Lasttest gestartet werden:
+
+```bash
+python3 influx_loadtest.py --requests 100 --workers 10
+```
+
+Wenn InfluxDB und Grafana automatisch gestartet werden, die Grafana-Datenquelle und das Dashboard automatisch vorhanden sind und der Lasttest erfolgreich durchgeführt werden kann, ist die vollständige Automatisierung des Projekts erfolgreich getestet.
+
+## Erwartetes Testergebnis
 
 | Test | Erwartetes Ergebnis |
-|---|---|
-| `vagrant up` | VM wird erfolgreich erstellt |
-| `docker ps` | InfluxDB und Grafana laufen |
-| InfluxDB Healthcheck | InfluxDB ist erreichbar |
+| --- | --- |
+| InfluxDB-Container | Läuft und ist `healthy` |
+| InfluxDB Health Check | Erfolgreiche Antwort |
 | Python-Lasttest | Requests werden ausgeführt |
-| InfluxDB Data Explorer | Lasttest-Daten sind vorhanden |
-| Grafana-Datenquelle | Verbindung zu InfluxDB funktioniert |
-| Grafana-Dashboard | Lasttest-Daten werden dargestellt |
+| Speicherung | Messwerte erscheinen im Bucket `LoadTest` |
+| Grafana-Container | Läuft und ist `healthy` |
+| Grafana-Datenquelle | InfluxDB ist automatisch eingerichtet |
+| Grafana-Dashboard | Dashboard ist automatisch vorhanden |
+| Visualisierung | Neue Lasttest-Daten erscheinen im Dashboard |
+| Neuaufbau mit Vagrant | Umgebung wird mit `vagrant up` automatisch erstellt |
 
----
 
 # Entwicklung von manuell zu automatisiert
 
-Während der Entwicklung wurden verschiedene Schritte zunächst manuell durchgeführt.
+Ein wichtiger Bestandteil des Projekts war nicht nur die fertige Umgebung, sondern auch deren schrittweiser Aufbau.
 
-Dazu gehörten unter anderem:
+## 1. Manueller Aufbau von InfluxDB
 
-- Starten der Container
-- Konfiguration von InfluxDB
-- Erstellen des API Tokens
-- Konfiguration der Grafana-Datenquelle
-- Erstellen der Grafana-Panels
-- Ausführen des Python-Lasttests
+InfluxDB wurde zunächst manuell installiert und konfiguriert.
 
-Anschliessend wurden möglichst viele dieser Schritte automatisiert.
+Dabei wurden:
 
-Dadurch kann die Testumgebung reproduzierbar aufgebaut werden.
+- InfluxDB installiert,
+- der Dienst gestartet,
+- eine Organisation angelegt,
+- ein Bucket erstellt,
+- ein API-Token erzeugt,
+- die API-Verbindung getestet.
+
+## 2. Entwicklung des Lasttest-Skripts
+
+Anschliessend wurde das Python-Skript entwickelt und gegen die manuell installierte InfluxDB getestet.
+
+Damit konnte überprüft werden, ob:
+
+- parallele Requests funktionieren,
+- Antwortzeiten gemessen werden,
+- Fehler erkannt werden,
+- Ergebnisse wieder in InfluxDB geschrieben werden.
+
+## 3. Manueller Aufbau von Grafana
+
+Grafana wurde zunächst ebenfalls manuell installiert.
+
+InfluxDB wurde manuell als Datenquelle hinterlegt und die benötigten Flux-Abfragen wurden in Grafana erstellt.
+
+Dadurch konnte überprüft werden, welche Daten für das Dashboard benötigt werden.
+
+## 4. Automatisierung mit Docker Compose
+
+Nachdem die manuelle Umgebung funktionierte, wurden InfluxDB und Grafana in Docker-Container überführt.
+
+Docker Compose übernimmt seitdem:
+
+- Start von InfluxDB,
+- Initialisierung von InfluxDB,
+- Start von Grafana,
+- persistente Docker-Volumes,
+- Netzwerkkommunikation zwischen den Containern.
+
+## 5. Automatisierung von Grafana
+
+Im nächsten Schritt wurde Grafana Provisioning verwendet.
+
+Damit werden automatisch:
+
+- die InfluxDB-Datenquelle,
+- die Verbindungseinstellungen,
+- das Lasttest-Dashboard,
+- die vier Dashboard-Panels
+
+bereitgestellt.
+
+## 6. Automatisierung mit Vagrant
+
+Vagrant bildet die letzte Automatisierungsstufe.
+
+Die vollständige Umgebung kann mit folgendem Befehl aufgebaut werden:
+
+```bash
+vagrant up
+```
+
+Das Ziel dieser Entwicklung war, aus einer zunächst manuell eingerichteten Laborumgebung eine reproduzierbare und automatisierte Testumgebung zu erstellen.
 
 ---
 
 # Bedienung und Fehlersuche
 
-## `.env` wurde nicht geladen
+Die folgenden Vagrant-Befehle werden im Verzeichnis `lastentest_vm` ausgeführt.
 
-Prüfen:
+## VM-Status anzeigen
 
 ```bash
-echo "$INFLUX_ORG"
+vagrant status
 ```
 
+## VM starten
+
 ```bash
-echo "$INFLUX_BUCKET"
+vagrant up
 ```
 
-Der Token sollte aus Sicherheitsgründen nicht vollständig im Terminal ausgegeben werden.
-
-Prüfen, ob ein Token gesetzt ist:
+## VM herunterfahren
 
 ```bash
-if [ -n "$INFLUX_TOKEN" ]; then echo "Token ist gesetzt"; else echo "Token fehlt"; fi
+vagrant halt
 ```
 
-Falls die Variablen fehlen:
+## SSH-Verbindung herstellen
 
 ```bash
-set -a
-source .env
-set +a
+vagrant ssh
+```
+
+## Provisionierung erneut ausführen
+
+```bash
+vagrant provision
 ```
 
 ---
 
-# HTTP 401 Unauthorized
+# Docker-Container prüfen
 
-Wenn der Python-Lasttest oder Grafana folgende Meldung liefert:
-
-```text
-HTTP 401
-unauthorized access
-```
-
-sollte zuerst kontrolliert werden, ob der aktuelle API Token in `.env` eingetragen ist.
-
-Der Custom API Token benötigt für dieses Projekt:
-
-```text
-Read  → LoadTest
-Write → LoadTest
-```
-
-Wenn in InfluxDB ein neuer Token erstellt wurde, muss der Wert in `.env` aktualisiert werden.
-
-Danach kann Grafana neu erstellt werden:
+Zuerst mit der VM verbinden:
 
 ```bash
-sudo docker compose up -d --force-recreate Grafana
+vagrant ssh
 ```
 
-Es sollte ebenfalls geprüft werden, ob Organisation und Bucket korrekt im Grafana-Container vorhanden sind:
+Danach in das Projektverzeichnis wechseln:
 
 ```bash
-sudo docker exec Grafana sh -c 'echo "ORG=$INFLUX_ORG | BUCKET=$INFLUX_BUCKET"'
+cd /project
 ```
 
-Erwartet:
-
-```text
-ORG=Iot | BUCKET=LoadTest
-```
-
-Prüfen, ob der Token im Grafana-Container gesetzt wurde, ohne ihn anzuzeigen:
+Containerstatus anzeigen:
 
 ```bash
-sudo docker exec Grafana sh -c 'echo "Token-Laenge: ${#INFLUX_TOKEN}"'
+docker compose ps
 ```
 
-Ein eingeschränkter Custom API Token sollte nicht allgemein über `/api/v2/me` getestet werden.
-
-Ein solcher Token kann bei diesem Endpunkt einen HTTP-401-Fehler liefern, wenn er keine Berechtigung zum Lesen von Benutzerdaten besitzt, obwohl die benötigten Lese- und Schreibzugriffe auf den Bucket funktionieren.
-
-Deshalb sollte der Token über die tatsächlich benötigten Query- und Write-Funktionen getestet werden.
-
----
-
-# Grafana Provisioning prüfen
-
-Prüfen, ob die InfluxDB-Datenquelle im Container vorhanden ist:
+## Logs von InfluxDB anzeigen
 
 ```bash
-sudo docker exec Grafana ls -la /etc/grafana/provisioning/datasources/
+docker logs InfluxDB
 ```
 
-Datei anzeigen:
+## Logs von Grafana anzeigen
 
 ```bash
-sudo docker exec Grafana cat /etc/grafana/provisioning/datasources/influxdb.yml
+docker logs Grafana
 ```
 
-Umgebungsvariablen prüfen:
+## Logs aller Compose-Dienste anzeigen
 
 ```bash
-sudo docker exec Grafana env | grep INFLUX
-```
-
-Dabei ist zu beachten, dass dieser Befehl den Token anzeigen kann. Die Ausgabe sollte deshalb nicht veröffentlicht oder in Screenshots verwendet werden.
-
-Grafana-Logs prüfen:
-
-```bash
-sudo docker logs Grafana 2>&1 | grep -i -E "datasource|provision|influx|unauthorized|error"
+docker compose logs --tail=100
 ```
 
 ---
 
-# Grafana zeigt keine Werte
+# InfluxDB prüfen
 
-Wenn das Dashboard keine Werte anzeigt, sollte zuerst geprüft werden, ob überhaupt Daten in InfluxDB vorhanden sind.
-
-Im InfluxDB Data Explorer:
-
-```flux
-from(bucket: "LoadTest")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r._measurement == "loadtest")
-```
-
-Falls keine Daten vorhanden sind, einen neuen Lasttest durchführen:
+Der Health-Endpunkt von InfluxDB kann mit folgendem Befehl getestet werden:
 
 ```bash
-python3 influx_loadtest.py --requests 100 --workers 10
+curl http://localhost:8086/health
 ```
 
-Danach das Grafana-Dashboard aktualisieren.
-
-Der Zeitraum in Grafana sollte beispielsweise auf folgendes eingestellt werden:
-
-```text
-Last 1 hour
-```
-
-oder:
-
-```text
-Last 24 hours
-```
+InfluxDB sollte einen erfolgreichen Status zurückgeben.
 
 ---
 
-# Zeit und Zeitzone
+# Grafana-Provisioning prüfen
 
-Wenn Daten vorhanden sind, aber im Grafana-Zeitbereich nicht erscheinen, sollte die Uhrzeit geprüft werden.
+## Datasource prüfen
+
+Mit folgendem Befehl kann geprüft werden, ob die InfluxDB-Datenquelle in den Grafana-Container eingebunden wurde:
 
 ```bash
-date
+docker exec Grafana ls -la /etc/grafana/provisioning/datasources/
 ```
 
+## Dashboard prüfen
+
+Mit folgendem Befehl kann geprüft werden, ob das Dashboard im Grafana-Container vorhanden ist:
+
 ```bash
-timedatectl
+docker exec Grafana ls -la /var/lib/grafana/dashboards/
 ```
 
-Die Zeitzone kann auf Zürich gesetzt werden:
+Dort sollte die Dashboard-Datei sichtbar sein:
 
-```bash
-sudo timedatectl set-timezone Europe/Zurich
-```
-
-NTP aktivieren:
-
-```bash
-sudo timedatectl set-ntp true
-```
-
-Danach erneut prüfen:
-
-```bash
-timedatectl
+```text
+loadtest-dashboard.json
 ```
 
 ---
 
 # Besonderheit bei Parallels
 
-Bei Parallels wird das Projekt über `rsync` in die VM übertragen.
+Bei Parallels wird das Projekt über RSync in die VM übertragen.
 
-Nach Änderungen auf dem Host kann deshalb eine erneute Synchronisation notwendig sein.
+Nach Änderungen am Hostsystem muss deshalb gegebenenfalls erneut synchronisiert werden.
 
-Im Verzeichnis `lastentest_vm`:
+Dazu wird im Verzeichnis `lastentest_vm` folgender Befehl ausgeführt:
 
 ```bash
 vagrant rsync
 ```
 
-Danach kann innerhalb der VM geprüft werden, ob die Dateien vorhanden sind:
+Anschliessend kann eine SSH-Verbindung zur VM hergestellt werden:
 
 ```bash
-ls -la /project
+vagrant ssh
 ```
 
-Grafana-Dateien prüfen:
+Innerhalb der VM wird in das Projektverzeichnis gewechselt:
 
 ```bash
-ls -la /project/grafana
+cd /project
 ```
 
-Wichtig ist, dass der Ordner `grafana/` nicht von der rsync-Konfiguration ausgeschlossen wird.
+Danach können die Docker-Container neu erstellt werden:
+
+```bash
+docker compose up -d --force-recreate
+```
+
+Bei VirtualBox kann dagegen ein direkt eingebundener Projektordner verwendet werden. Änderungen am Hostsystem stehen dadurch direkt innerhalb der VM zur Verfügung.
 
 ---
 
-# Docker neu starten
+# Docker-Dienste neu starten
 
-Alle Services können neu gestartet werden:
+Falls lediglich die Container neu gestartet werden sollen:
 
 ```bash
-sudo docker compose restart
+docker compose restart
 ```
 
-Oder neu erstellt werden:
+Falls die Container neu erstellt werden sollen:
 
 ```bash
-sudo docker compose up -d --force-recreate
+docker compose up -d --force-recreate
 ```
 
 ---
 
 # Docker-Daten vollständig zurücksetzen
 
-Falls ein vollständiger Reset notwendig ist:
+Falls die Testumgebung vollständig neu initialisiert werden soll, werden zunächst die Container und Docker-Volumes entfernt:
 
 ```bash
-sudo docker compose down -v
+docker compose down -v
 ```
 
-Danach:
+Anschliessend wird die Umgebung neu gestartet:
 
 ```bash
-sudo docker compose up -d
+docker compose up -d
 ```
 
-Achtung:
+> **Achtung:** Durch das Entfernen der Docker-Volumes gehen die darin gespeicherten InfluxDB- und Grafana-Daten verloren.
 
-Der Parameter `-v` löscht die Docker-Volumes.
-
-Dadurch können gespeicherte InfluxDB-Daten, Grafana-Daten und bestehende Konfigurationen verloren gehen.
-
-Dieser Befehl sollte deshalb nur verwendet werden, wenn ein vollständiger Reset beabsichtigt ist.
+Da das Grafana-Dashboard und die Datasource über Provisioning im Projekt gespeichert sind, werden diese beim nächsten Start automatisch wiederhergestellt.
 
 ---
 
-# VM neu erstellen
+# VM vollständig neu erstellen
 
-Die virtuelle Maschine kann vollständig gelöscht werden:
+Falls die komplette virtuelle Maschine gelöscht werden soll:
 
 ```bash
 vagrant destroy -f
 ```
 
-Danach neu erstellen:
+Danach kann die VM vollständig neu aufgebaut werden:
 
 ```bash
 vagrant up
 ```
 
+Dadurch lässt sich prüfen, ob die Automatisierung des Projekts auch auf einer komplett neuen VM funktioniert.
+
 ---
 
-# Git und Sicherheit
+# Git und sensible Daten
 
-Die `.env`-Datei darf nicht in Git eingecheckt werden.
+Die `.env`-Datei enthält Zugangsdaten und den InfluxDB-Token und sollte deshalb nicht in das Git-Repository aufgenommen werden.
 
-Prüfen:
-
-```bash
-git status
-```
-
-Die `.gitignore` sollte mindestens enthalten:
+Die `.gitignore` sollte mindestens folgende Einträge enthalten:
 
 ```gitignore
 .env
 venv/
 .vagrant/
 .DS_Store
-*.box
 ```
 
-Insbesondere VM-Images und Vagrant-Pakete sollten nicht in das Repository aufgenommen werden, da diese sehr gross sein können.
+Statt der echten `.env` wird eine `.env.example` im Repository bereitgestellt.
 
----
+Dadurch bleibt die benötigte Konfiguration dokumentiert, ohne Zugangsdaten oder Tokens zu veröffentlichen.
 
-# Sicherheit des API Tokens
+Nach dem Klonen wird die Vorlage kopiert:
 
-API Tokens sollten wie Passwörter behandelt werden.
+```bash
+cp .env.example .env
+```
 
-Folgende Regeln sollten beachtet werden:
-
-- Token nicht direkt im Python-Code speichern
-- Token nicht im README hinterlegen
-- Token nicht in Screenshots veröffentlichen
-- Token nicht in ein öffentliches Git-Repository übertragen
-- `.env` über `.gitignore` ausschliessen
-- Nur die tatsächlich benötigten Berechtigungen vergeben
-- Nicht mehr benötigte Tokens in InfluxDB löschen oder widerrufen
-- Bei einem versehentlich veröffentlichten Token einen neuen Token erstellen
-
-Für dieses Projekt ist ein Custom Token mit Read- und Write-Zugriff auf den Bucket `LoadTest` ausreichend.
+Anschliessend werden die benötigten Werte lokal eingetragen.
 
 ---
 
 # Ausblick
 
-Das Projekt kann zukünftig erweitert werden.
+Die bestehende Umgebung kann später erweitert werden.
 
 Mögliche Erweiterungen sind:
 
-- Tests mit einer definierten Testdauer
-- Begrenzung der Requests pro Sekunde
-- Automatische Durchführung mehrerer Laststufen
-- Vergleich mehrerer Testläufe
-- Zusätzliche Grafana-Panels
-- Überwachung von CPU- und RAM-Auslastung
-- Export von Testergebnissen
-- Automatische Erstellung eines Testberichts
-- Alarmierung bei hohen Antwortzeiten oder Fehlerquoten
-- Erweiterte Fehleranalyse
+- automatische Durchführung mehrerer Laststufen,
+- Vergleich verschiedener Worker-Zahlen,
+- zusätzliche Kennzahlen wie Minimum, Maximum und Median,
+- CPU- und RAM-Monitoring während des Lasttests,
+- automatische Grafana-Alerts bei hohen Antwortzeiten,
+- automatische Testberichte,
+- Vergleich verschiedener InfluxDB-Konfigurationen,
+- zusätzliche Dashboards für Systemressourcen.
+
+Damit könnte die bestehende Lasttest-Umgebung zu einer umfangreicheren Monitoring- und Performance-Testplattform erweitert werden.
 
 ---
 
 # Sicherheitshinweis
 
-Die Testumgebung ist für Labor-, Lern- und Demonstrationszwecke vorgesehen.
+Das Lasttest-Skript erzeugt gezielt eine erhöhte Anzahl von Anfragen.
 
-Lasttests sollten ausschliesslich gegen Systeme durchgeführt werden, für die eine entsprechende Berechtigung vorliegt.
+Es darf deshalb nur gegen die eigene Laborumgebung oder gegen Systeme eingesetzt werden, für die eine ausdrückliche Genehmigung vorliegt.
 
-Die Last sollte schrittweise erhöht werden, damit die Auswirkungen auf das Zielsystem kontrolliert werden können.
+Eine hohe Anzahl paralleler Requests kann Dienste stark belasten oder zu deren Ausfall führen. Die Anzahl der Requests und Worker sollte deshalb schrittweise erhöht und während des Tests überwacht werden.
+
+Die in diesem Projekt verwendeten Zugangsdaten und Tokens sind ausschliesslich für die isolierte Laborumgebung vorgesehen und dürfen nicht für produktive Systeme übernommen werden.
