@@ -85,10 +85,6 @@ Der Lasttest wird über ein Python-Skript ausgeführt und greift über den verö
                 ┌─────────────────┐
                 │   Ubuntu VM     │
                 │                 │
-                │  Python-Skript  │
-                │       │         │
-                │       │ Lasttest│
-                │       ▼         │
                 │ ┌─────────────┐ │
                 │ │  InfluxDB   │ │
                 │ │   Docker    │ │
@@ -106,6 +102,12 @@ Der Lasttest wird über ein Python-Skript ausgeführt und greift über den verö
              │                     │
         localhost:8086        localhost:3000
           InfluxDB               Grafana
+             ▲
+             │
+             │ Lasttest
+             │
+        Python-Skript
+         Hostsystem
 ```
 
 ## Datenfluss
